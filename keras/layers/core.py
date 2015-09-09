@@ -248,10 +248,11 @@ class Dropout(MaskedLayer):
     '''
         Hinton's dropout.
     '''
-    def __init__(self, p):
+    def __init__(self, p, caffe_mode=False):
         super(Dropout, self).__init__()
         self.p = p
         self.srng = RandomStreams(seed=np.random.randint(10e6))
+        self.caffe_mode = caffe_mode
 
     def get_output(self, train=False):
         X = self.get_input(train)
@@ -259,7 +260,7 @@ class Dropout(MaskedLayer):
             retain_prob = 1. - self.p
             if train:
                 X *= self.srng.binomial(X.shape, p=retain_prob, dtype=theano.config.floatX)
-            else:
+            elif not self.caffe_mode:
                 X *= retain_prob
         return X
 
