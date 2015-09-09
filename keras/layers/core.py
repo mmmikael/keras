@@ -260,6 +260,8 @@ class Dropout(MaskedLayer):
             retain_prob = 1. - self.p
             if train:
                 X *= self.srng.binomial(X.shape, p=retain_prob, dtype=theano.config.floatX)
+                if self.caffe_mode:
+                    X /= retain_prob
             elif not self.caffe_mode:
                 X *= retain_prob
         return X
