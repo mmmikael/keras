@@ -341,71 +341,83 @@ class Sequential(Model, containers.Sequential):
             - set_weights
     '''
 
-    def compile(self, optimizer, loss, class_mode="categorical", theano_mode=None):
-        self.optimizer = optimizers.get(optimizer)
+    def compile(self, optimizer, loss, class_mode="categorical", theano_mode=None, predict_only=False):
+        if predict_only:
+            self.X_test = self.get_input(train=False)
+            self.y_test = self.get_output(train=False)
 
-        self.loss = objectives.get(loss)
-        weighted_loss = weighted_objective(objectives.get(loss))
+            if type(self.X_test) == list:
+                predict_ins = self.X_test
+            else:
+                predict_ins = [self.X_test]
 
-        # input of model
-        self.X_train = self.get_input(train=True)
-        self.X_test = self.get_input(train=False)
-
-        self.y_train = self.get_output(train=True)
-        self.y_test = self.get_output(train=False)
-
-        # target of model
-        self.y = T.zeros_like(self.y_train)
-
-        self.weights = T.ones_like(self.y_train)
-
-        if hasattr(self.layers[-1], "get_output_mask"):
-            mask = self.layers[-1].get_output_mask()
-        else:
-            mask = None
-        train_loss = weighted_loss(self.y, self.y_train, self.weights, mask)
-        test_loss = weighted_loss(self.y, self.y_test, self.weights, mask)
-
-        train_loss.name = 'train_loss'
-        test_loss.name = 'test_loss'
-        self.y.name = 'y'
-
-        if class_mode == "categorical":
-            train_accuracy = T.mean(T.eq(T.argmax(self.y, axis=-1), T.argmax(self.y_train, axis=-1)))
-            test_accuracy = T.mean(T.eq(T.argmax(self.y, axis=-1), T.argmax(self.y_test, axis=-1)))
-
-        elif class_mode == "binary":
-            train_accuracy = T.mean(T.eq(self.y, T.round(self.y_train)))
-            test_accuracy = T.mean(T.eq(self.y, T.round(self.y_test)))
-        else:
-            raise Exception("Invalid class mode:" + str(class_mode))
-        self.class_mode = class_mode
-        self.theano_mode = theano_mode
-
-        for r in self.regularizers:
-            train_loss = r(train_loss)
-        updates = self.optimizer.get_updates(self.params, self.constraints, train_loss)
-        updates += self.updates
-
-        if type(self.X_train) == list:
-            train_ins = self.X_train + [self.y, self.weights]
-            test_ins = self.X_test + [self.y, self.weights]
-            predict_ins = self.X_test
-        else:
-            train_ins = [self.X_train, self.y, self.weights]
-            test_ins = [self.X_test, self.y, self.weights]
-            predict_ins = [self.X_test]
-
-        self._train = theano.function(train_ins, train_loss, updates=updates,
-                                      allow_input_downcast=True, mode=theano_mode)
-        self._train_with_acc = theano.function(train_ins, [train_loss, train_accuracy], updates=updates,
-                                               allow_input_downcast=True, mode=theano_mode)
-        self._predict = theano.function(predict_ins, self.y_test,
+            self._predict = theano.function(predict_ins, self.y_test,
                                         allow_input_downcast=True, mode=theano_mode)
-        self._test = theano.function(test_ins, test_loss,
-                                     allow_input_downcast=True, mode=theano_mode)
-        self._test_with_acc = theano.function(test_ins, [test_loss, test_accuracy],
-                                              allow_input_downcast=True, mode=theano_mode)
+        else:
+            self.optimizer = optimizers.get(optimizer)
+
+            self.loss = objectives.get(loss)
+            weighted_loss = weighted_objective(objectives.get(loss))
+
+            # input of model
+            self.X_train = self.get_input(train=True)
+            self.X_test = self.get_input(train=False)
+
+            self.y_train = self.get_output(train=True)
+            self.y_test = self.get_output(train=False)
+
+            # target of model
+            self.y = T.zeros_like(self.y_train)
+
+            self.weights = T.ones_like(self.y_train)
+
+            if hasattr(self.layers[-1], "get_output_mask"):
+                mask = self.layers[-1].get_output_mask()
+            else:
+                mask = None
+            train_loss = weighted_loss(self.y, self.y_train, self.weights, mask)
+            test_loss = weighted_loss(self.y, self.y_test, self.weights, mask)
+
+            train_loss.name = 'train_loss'
+            test_loss.name = 'test_loss'
+            self.y.name = 'y'
+
+            if class_mode == "categorical":
+                train_accuracy = T.mean(T.eq(T.argmax(self.y, axis=-1), T.argmax(self.y_train, axis=-1)))
+                test_accuracy = T.mean(T.eq(T.argmax(self.y, axis=-1), T.argmax(self.y_test, axis=-1)))
+
+            elif class_mode == "binary":
+                train_accuracy = T.mean(T.eq(self.y, T.round(self.y_train)))
+                test_accuracy = T.mean(T.eq(self.y, T.round(self.y_test)))
+            else:
+                raise Exception("Invalid class mode:" + str(class_mode))
+            self.class_mode = class_mode
+            self.theano_mode = theano_mode
+
+            for r in self.regularizers:
+                train_loss = r(train_loss)
+            updates = self.optimizer.get_updates(self.params, self.constraints, train_loss)
+            updates += self.updates
+
+            if type(self.X_train) == list:
+                train_ins = self.X_train + [self.y, self.weights]
+                test_ins = self.X_test + [self.y, self.weights]
+                predict_ins = self.X_test
+            else:
+                train_ins = [self.X_train, self.y, self.weights]
+                test_ins = [self.X_test, self.y, self.weights]
+                predict_ins = [self.X_test]
+
+            self._train = theano.function(train_ins, train_loss, updates=updates,
+                                          allow_input_downcast=True, mode=theano_mode)
+            self._train_with_acc = theano.function(train_ins, [train_loss, train_accuracy], updates=updates,
+                                                   allow_input_downcast=True, mode=theano_mode)
+            self._predict = theano.function(predict_ins, self.y_test,
+                                            allow_input_downcast=True, mode=theano_mode)
+            self._test = theano.function(test_ins, test_loss,
+                                         allow_input_downcast=True, mode=theano_mode)
+            self._test_with_acc = theano.function(test_ins, [test_loss, test_accuracy],
+                                                  allow_input_downcast=True, mode=theano_mode)
 
     def train_on_batch(self, X, y, accuracy=False, class_weight=None, sample_weight=None):
         X = standardize_X(X)
