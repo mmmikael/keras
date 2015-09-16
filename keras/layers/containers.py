@@ -40,10 +40,23 @@ class Sequential(Layer):
         layer.init_updates()
 
         params, regularizers, constraints, updates = layer.get_params()
-        self.params += params
+        if layer.trainable:
+            self.params += params
+            self.updates += updates
+
         self.regularizers += regularizers
         self.constraints += constraints
-        self.updates += updates
+
+    def rebuild(self):
+        layers = self.layers
+        self.layers = []
+        self.params = []
+        self.regularizers = []
+        self.constraints = []
+        self.updates = []
+
+        for layer in layers:
+            self.add(layer)
 
     def get_output(self, train=False):
         return self.layers[-1].get_output(train)

@@ -17,6 +17,7 @@ from six.moves import zip
 class Layer(object):
     def __init__(self):
         self.params = []
+        self.trainable = True
 
     def init_updates(self):
         self.updates = []
