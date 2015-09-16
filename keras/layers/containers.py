@@ -58,6 +58,17 @@ class Sequential(Layer):
         for layer in layers:
             self.add(layer)
 
+        if hasattr(self, '_train'):
+            del self._train
+        if hasattr(self, '_train_with_acc'):
+            del self._train_with_acc
+        if hasattr(self, '_predict'):
+            del self._predict
+        if hasattr(self, '_test'):
+            del self._test
+        if hasattr(self, '_test_with_acc'):
+            del self._test_with_acc
+
     def get_output(self, train=False):
         return self.layers[-1].get_output(train)
 
