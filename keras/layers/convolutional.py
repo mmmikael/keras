@@ -196,6 +196,95 @@ class Convolution2D(Layer):
                 "b_constraint": self.b_constraint.get_config() if self.b_constraint else None}
 
 
+class Convolution3D(Layer):
+    def __init__(self, nb_filter, stack_size, nb_slice, nb_row, nb_col,
+                 init='glorot_uniform', activation='linear', weights=None,
+                 border_mode='valid', subsample=(1, 1, 1),
+                 W_regularizer=None, b_regularizer=None, activity_regularizer=None,
+                 W_constraint=None, b_constraint=None):
+
+        if border_mode not in {'valid', 'full', 'same'}:
+            raise Exception('Invalid border mode for Convolution3D:', border_mode)
+
+        super(Convolution3D, self).__init__()
+        self.init = initializations.get(init)
+        self.activation = activations.get(activation)
+        self.subsample = subsample
+        self.border_mode = border_mode
+        self.nb_filter = nb_filter
+        self.stack_size = stack_size
+
+        self.nb_slice = nb_slice
+        self.nb_row = nb_row
+        self.nb_col = nb_col
+
+        tensor5 = T.TensorType(theano.config.floatX, (False,)*5)
+        self.input = tensor5()
+        self.W_shape = (nb_filter, stack_size, nb_slice, nb_row, nb_col)
+        self.W = self.init(self.W_shape)
+        self.b = shared_zeros((nb_filter,))
+
+        self.params = [self.W, self.b]
+
+        self.regularizers = []
+
+        self.W_regularizer = regularizers.get(W_regularizer)
+        if self.W_regularizer:
+            self.W_regularizer.set_param(self.W)
+            self.regularizers.append(self.W_regularizer)
+
+        self.b_regularizer = regularizers.get(b_regularizer)
+        if self.b_regularizer:
+            self.b_regularizer.set_param(self.b)
+            self.regularizers.append(self.b_regularizer)
+
+        self.activity_regularizer = regularizers.get(activity_regularizer)
+        if self.activity_regularizer:
+            self.activity_regularizer.set_layer(self)
+            self.regularizers.append(self.activity_regularizer)
+
+        self.W_constraint = constraints.get(W_constraint)
+        self.b_constraint = constraints.get(b_constraint)
+        self.constraints = [self.W_constraint, self.b_constraint]
+
+        if weights is not None:
+            self.set_weights(weights)
+
+    def get_output(self, train):
+        X = self.get_input(train)
+        border_mode = self.border_mode
+        if on_gpu() and dnn.dnn_available():
+            if border_mode == 'same':
+                assert(self.subsample == (1, 1, 1))
+                pad_z = (self.nb_slice - self.subsample[0]) // 2
+                pad_y = (self.nb_row - self.subsample[1]) // 2
+                pad_x = (self.nb_col - self.subsample[2]) // 2
+                conv_out = dnn.dnn_conv3d(img=X, kerns=self.W, border_mode=(pad_z, pad_y, pad_x))
+            else:
+                conv_out = dnn.dnn_conv3d(img=X, kerns=self.W, border_mode=border_mode, subsample=self.subsample)
+        else:
+            raise ValueError('3D convolution without CuDNN not supported.')
+
+        return self.activation(conv_out + self.b.dimshuffle('x', 0, 'x', 'x', 'x'))
+
+    def get_config(self):
+        return {"name": self.__class__.__name__,
+                "nb_filter": self.nb_filter,
+                "stack_size": self.stack_size,
+                "nb_slice": self.nb_slice,
+                "nb_row": self.nb_row,
+                "nb_col": self.nb_col,
+                "init": self.init.__name__,
+                "activation": self.activation.__name__,
+                "border_mode": self.border_mode,
+                "subsample": self.subsample,
+                "W_regularizer": self.W_regularizer.get_config() if self.W_regularizer else None,
+                "b_regularizer": self.b_regularizer.get_config() if self.b_regularizer else None,
+                "activity_regularizer": self.activity_regularizer.get_config() if self.activity_regularizer else None,
+                "W_constraint": self.W_constraint.get_config() if self.W_constraint else None,
+                "b_constraint": self.b_constraint.get_config() if self.b_constraint else None}
+
+
 class MaxPooling1D(Layer):
     def __init__(self, pool_length=2, stride=None, ignore_border=True):
         super(MaxPooling1D, self).__init__()
@@ -290,6 +379,27 @@ class ZeroPadding2D(Layer):
         out_shape = (in_shape[0], in_shape[1], in_shape[2] + 2 * pad[0], in_shape[3] + 2 * pad[1])
         out = T.zeros(out_shape)
         indices = (slice(None), slice(None), slice(pad[0], in_shape[2] + pad[0]), slice(pad[1], in_shape[3] + pad[1]))
+        return T.set_subtensor(out[indices], X)
+
+    def get_config(self):
+        return {"name": self.__class__.__name__,
+                "pad": self.pad}
+
+
+class ZeroPadding3D(Layer):
+    def __init__(self, pad=(1, 1, 1)):
+        super(ZeroPadding3D, self).__init__()
+        self.pad = pad
+        tensor5 = T.TensorType(theano.config.floatX, (False,)*5)
+        self.input = tensor5()
+
+    def get_output(self, train):
+        X = self.get_input(train)
+        pad = self.pad
+        in_shape = X.shape
+        out_shape = (in_shape[0], in_shape[1], in_shape[2] + 2 * pad[0], in_shape[3] + 2 * pad[1], in_shape[4] + 2 * pad[2])
+        out = T.zeros(out_shape)
+        indices = (slice(None), slice(None), slice(pad[0], in_shape[2] + pad[0]), slice(pad[1], in_shape[3] + pad[1]), slice(pad[2], in_shape[4] + pad[2]))
         return T.set_subtensor(out[indices], X)
 
     def get_config(self):
