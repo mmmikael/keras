@@ -227,13 +227,41 @@ class Graph(Layer):
                                  'create_output': create_output})
         layer.init_updates()
         params, regularizers, constraints, updates = layer.get_params()
-        self.params += params
+        if layer.trainable:
+            self.params += params
+            self.updates += updates
         self.regularizers += regularizers
         self.constraints += constraints
-        self.updates += updates
 
         if create_output:
             self.add_output(name, input=name)
+
+
+    def rebuild(self):
+        self.params = []
+        self.regularizers = []
+        self.constraints = []
+        self.updates = []
+
+        for k in self.nodes:
+            params, regularizers, constraints, updates = self.nodes[k].get_params()
+            if self.nodes[k].trainable:
+                self.params += params
+                self.updates += updates
+            self.regularizers += regularizers
+            self.constraints += constraints
+
+        if hasattr(self, '_train'):
+            del self._train
+        if hasattr(self, '_train_with_acc'):
+            del self._train_with_acc
+        if hasattr(self, '_predict'):
+            del self._predict
+        if hasattr(self, '_test'):
+            del self._test
+        if hasattr(self, '_test_with_acc'):
+            del self._test_with_acc
+
 
     def add_output(self, name, input=None, inputs=[],
                    merge_mode='concat', concat_axis=-1):
