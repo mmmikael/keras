@@ -164,7 +164,7 @@ class Masking(MaskedLayer):
 class Merge(Layer):
     def __init__(self, layers, mode='sum', concat_axis=-1):
         ''' Merge the output of a list of layers or containers into a single tensor.
-            mode: {'sum', 'mul', 'concat'}
+            mode: {'sum', 'mul', 'concat', 'crop_sum'}
         '''
         if len(layers) < 2:
             raise Exception("Please specify two or more input layers (or containers) to merge")
@@ -189,7 +189,16 @@ class Merge(Layer):
         return self.params, self.regularizers, self.constraints, self.updates
 
     def get_output(self, train=False):
-        if self.mode == 'sum':
+        if self.mode == 'crop_sum':
+            s = self.layers[0].get_output(train)
+            for i in range(1, len(self.layers)):
+                l = self.layers[i].get_output(train)
+                dshape = T.cast((l.shape - s.shape) / 2, 'int32')
+                s += self.layers[i].get_output(train)[:, :,
+                       dshape[2]: dshape[2] + s.shape[2],
+                       dshape[3]: dshape[3] + s.shape[3]]
+            return s
+        elif self.mode == 'sum':
             s = self.layers[0].get_output(train)
             for i in range(1, len(self.layers)):
                 s += self.layers[i].get_output(train)
