@@ -193,7 +193,7 @@ class Graph(Layer):
         self.input_config.append({'name': name, 'ndim': ndim, 'dtype': dtype})
 
     def add_node(self, layer, name, input=None, inputs=[],
-                 merge_mode='concat', concat_axis=-1, create_output=False):
+                 merge_mode='concat', concat_axis=-1, create_output=False, trainable=True):
         if hasattr(layer, 'set_name'):
             layer.set_name(name)
         if name in self.namespace:
@@ -217,6 +217,7 @@ class Graph(Layer):
             merge = Merge(to_merge, mode=merge_mode, concat_axis=concat_axis)
             layer.set_previous(merge)
 
+        layer.trainable = trainable
         self.namespace.add(name)
         self.nodes[name] = layer
         self.node_config.append({'name': name,
@@ -224,7 +225,8 @@ class Graph(Layer):
                                  'inputs': inputs,
                                  'merge_mode': merge_mode,
                                  'concat_axis': concat_axis,
-                                 'create_output': create_output})
+                                 'create_output': create_output,
+                                 'trainable': layer.trainable})
         layer.init_updates()
         params, regularizers, constraints, updates = layer.get_params()
         if layer.trainable:
@@ -250,6 +252,9 @@ class Graph(Layer):
                 self.updates += updates
             self.regularizers += regularizers
             self.constraints += constraints
+
+        for d in self.node_config:
+            d['trainable'] = self.nodes[d['name']].trainable
 
         if hasattr(self, '_train'):
             del self._train
